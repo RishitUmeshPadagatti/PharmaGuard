@@ -1,13 +1,17 @@
 import type { Request, Response } from "express";
 import { v4 as uuidv4 } from "uuid";
-import { isValidDrug } from "../types/drug.types.js";
+import { isValidDrug, DrugName } from "../types/drug.types.js";
 import { parseVCF } from "../services/vcfParser.service.js";
 import { generateDiplotypes } from "../services/diplotype.service.js";
 import { mapToPhenotype } from "../services/phenotype.service.js";
 import { evaluateRisk } from "../services/riskEngine.service.js";
-import { success } from "zod";
 
 export const analyzePatient = async (req: Request, res: Response) => {
+  if (!req.session.patient_id) {
+    req.session.patient_id = uuidv4().slice(0, 8);
+  }
+
+  const patientId = req.session.patient_id;
   try {
     // File validation
     if (!req.file) {
@@ -17,23 +21,35 @@ export const analyzePatient = async (req: Request, res: Response) => {
       });
     }
 
-    //Drug input validation
-    const drug = req.body.drug;
+    const drugInput = req.body.drug;
 
-    if (!drug || typeof drug !== "string") {
+    if (!drugInput || typeof drugInput !== "string") {
       return res.status(400).json({
         success: false,
-        message: "Drug name is required",
+        message: "At least one drug name is required",
       });
     }
 
-    const drugName = drug.trim().toUpperCase();
+    const drugs = drugInput
+      .split(",")
+      .map((d: string) => d.trim().toUpperCase())
+      .filter(Boolean);
 
-    if (!isValidDrug(drugName)) {
+    if (drugs.length === 0) {
       return res.status(400).json({
         success: false,
-        message: "Invalid drug name",
+        message: "No valid drugs provided",
       });
+    }
+
+    // Validate each drug
+    for (const drug of drugs) {
+      if (!isValidDrug(drug)) {
+        return res.status(400).json({
+          success: false,
+          message: `Invalid drug name: ${drug}`,
+        });
+      }
     }
 
     // For now just return upload success
@@ -78,24 +94,50 @@ export const analyzePatient = async (req: Request, res: Response) => {
     const genePhenotypeMap = Object.fromEntries(
       phenotypeResults.map((p) => [p.gene, p.phenotype]),
     );
-    const risk = evaluateRisk(drugName, genePhenotypeMap);
+    const drugAnalysis = drugs.map((drug) => {
+      const risk = evaluateRisk(drug as DrugName, genePhenotypeMap);
+
+      return {
+        drug,
+        risk_assessment: risk,
+        clinical_recommendation: {}, // placeholder for now
+      };
+    });
+
     // console.log("Diplotypes:", diplotypes);
     // console.log("Parsed Variants:", variants);
 
+    // return res.status(200).json({
+    //   patient_id: uuidv4(),
+    //   drug: drugName,
+    //   timestamp: new Date().toISOString(),
+    //   risk_assessment: risk,
+    //   pharmacogenomic_profile: phenotypeResults,
+    //   clinical_recommendation: {},
+    //   llm_generated_explanation: {},
+
+    //   quality_metrics: {
+    //     vcf_parsing_success: true,
+    //   },
+    //   //   success: true,
+    //   //   variant_count: variants.length,
+    //   //   variants,
+    // });
     return res.status(200).json({
-      patient_id: uuidv4(),
-      drug: drugName,
+      patient_id: patientId,
       timestamp: new Date().toISOString(),
-      risk_assessment: risk,
-      pharmacogenomic_profile: phenotypeResults,
-      clinical_recommendation: {},
+
+      pharmacogenomic_profile: {
+        genes: phenotypeResults,
+      },
+
+      drug_analysis: drugAnalysis,
+
       llm_generated_explanation: {},
+
       quality_metrics: {
         vcf_parsing_success: true,
       },
-      //   success: true,
-      //   variant_count: variants.length,
-      //   variants,
     });
   } catch (err: any) {
     console.error(err);

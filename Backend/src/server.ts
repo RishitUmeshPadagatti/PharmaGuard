@@ -3,10 +3,21 @@ import dotenv from "dotenv";
 import analyzeRoute from "./routes/analyze.route.js";
 import whatsappRoute from "./routes/whatsapp.route.js";
 import emailRoute from "./routes/email.route.js";
+import session from "express-session";
 
 dotenv.config();
 
 const app = express();
+app.use(
+  session({
+    secret: "pharmaguard-secret",
+    resave: false,
+    saveUninitialized: true,
+    cookie: {
+      maxAge: 1000 * 60 * 30, // 30 minutes
+    },
+  }),
+);
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
