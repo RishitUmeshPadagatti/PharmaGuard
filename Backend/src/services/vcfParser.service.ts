@@ -2,8 +2,8 @@ import fs from "fs";
 import VCF, { Variant as GmodVariant } from "@gmod/vcf";
 import type { PGxVariant } from "../types/variant.types.js";
 
-export async function parseVCF(filePath: string): Promise<PGxVariant[]> {
-  const fileContent = fs.readFileSync(filePath, "utf-8");
+export async function parseVCF(fileBuffer: Buffer): Promise<PGxVariant[]> {
+  const fileContent = fileBuffer.toString("utf-8");
   const normalizedContent = fileContent.replace(/\r\n/g, "\n");
   const lines = normalizedContent.split("\n");
 

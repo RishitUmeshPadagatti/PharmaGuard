@@ -15,7 +15,7 @@ export const analyzePatient = async (req: Request, res: Response) => {
   const patientId = req.session.patient_id;
   try {
     // File validation
-    if (!req.file) {
+    if (!req.file?.buffer) {
       return res.status(400).json({
         success: false,
         message: "VCF file is required",
@@ -70,7 +70,7 @@ export const analyzePatient = async (req: Request, res: Response) => {
     //       message: error.message || "Internal Server Error",
     //     });
     //   }
-    const variants = await parseVCF(req.file.path);
+    const variants = await parseVCF(req.file.buffer);
     //const primaryGene = variants[0]?.gene;
 
     const diplotypes = generateDiplotypes(variants);
