@@ -8,68 +8,82 @@ load_dotenv()
 
 genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
 
-model = genai.GenerativeModel("gemini-2.5-flash")
+model = genai.GenerativeModel("gemini-2.5-flash-lite")
 
 
 def generate_clinical_response(gene, drug, phenotype, retrieved_docs):
-
+    """
+    Uses CPIC guideline context to generate a structured clinical_recommendation.
+    """
     context = "\n\n".join([doc.page_content for doc in retrieved_docs])
 
     prompt = f"""
 You are a clinical pharmacogenomics assistant.
 
-Use ONLY the provided CPIC guideline context.
+Use ONLY the provided CPIC guideline context below.
 Do NOT use external knowledge.
 Do NOT hallucinate.
-If information is missing, return null for that field.
+If information is not present in the context, return null for that field.
 
 Gene: {gene}
 Drug: {drug}
 Patient Phenotype: {phenotype}
 
-CPIC Context:
+CPIC Guideline Context:
 {context}
 
-Return STRICT JSON ONLY.
-Do not include explanations outside JSON.
-Do not include numbering.
-Do not include markdown.
+Based on the CPIC guidelines above, generate a structured clinical recommendation for this patient.
+
+Return STRICT JSON ONLY. No markdown. No explanation outside JSON.
 
 Output format:
-
 {{
-  "dosing_requirements": ""
+  "clinical_recommendation": {{
+    "recommendation": "A concise clinical action statement directly from CPIC guidelines (e.g. avoid standard dose, use alternative, reduce dose)",
+    "alternative_drugs": ["list of CPIC-recommended alternative drugs if applicable, or empty array"],
+    "dosing_guidance": "Specific dosing instruction from CPIC if available, otherwise null",
+    "monitoring": "Any clinical monitoring requirements from CPIC guidelines, or null",
+    "cpic_classification": "CPIC recommendation classification term if mentioned (e.g. Strong, Moderate, Optional), or null"
+  }}
 }}
-
 """
 
     response = model.generate_content(prompt)
 
     try:
-        # Clean response text in case of markdown blocks
         raw_text = response.text.strip()
         if raw_text.startswith("```json"):
             raw_text = raw_text[7:-3].strip()
         elif raw_text.startswith("```"):
             raw_text = raw_text[3:-3].strip()
-        
+
         return json.loads(raw_text)
     except Exception as e:
         print(f"Error parsing Gemini response: {e}")
-        return {"dosing_requirements": "Error generating recommendation"}
+        return {
+            "clinical_recommendation": {
+                "recommendation": "Error generating CPIC recommendation",
+                "alternative_drugs": [],
+                "dosing_guidance": None,
+                "monitoring": None,
+                "cpic_classification": None,
+            }
+        }
 
 
 def process_patient_analysis(patient_data):
     """
-    Processes the complex patient JSON and returns dosing requirements for all drugs.
+    Processes patient pharmacogenomic JSON and enriches each drug record
+    with a CPIC-based clinical_recommendation from the RAG system.
+    Returns the full original data with clinical_recommendation injected per drug.
     """
     profile = patient_data.get("pharmacogenomic_profile", {}).get("genes", [])
     drug_analysis = patient_data.get("drug_analysis", [])
-    
-    # Create a map of gene to phenotype
+
+    # Gene phenotype lookup
     gene_map = {item["gene"]: item["phenotype"] for item in profile}
-    
-    # Gene to Drug mapping (synchronized with ingest.py)
+
+    # Drug → Gene mapping (must match ingest.py)
     drug_to_gene_map = {
         "CODEINE": "CYP2D6",
         "CLOPIDOGREL": "CYP2C19",
@@ -79,41 +93,57 @@ def process_patient_analysis(patient_data):
         "MERCAPTOPURINE": "TPMT",
         "THIOGUANINE": "TPMT",
         "FLUOROURACIL": "DPYD",
-        "CAPECITABINE": "DPYD"
+        "CAPECITABINE": "DPYD",
     }
 
-    results = []
+    enriched_drug_analysis = []
 
     for drug_record in drug_analysis:
         drug_name = drug_record.get("drug", "").upper()
         gene_name = drug_to_gene_map.get(drug_name)
-        
+
         if not gene_name:
-            results.append({
-                "drug": drug_name,
-                "dosing_requirements": "Gene mapping not found for this drug"
+            enriched_drug_analysis.append({
+                **drug_record,
+                "clinical_recommendation": {
+                    "recommendation": "No CPIC guideline mapping found for this drug",
+                    "alternative_drugs": [],
+                    "dosing_guidance": None,
+                    "monitoring": None,
+                    "cpic_classification": None,
+                },
             })
             continue
-            
+
         phenotype = gene_map.get(gene_name)
         if not phenotype:
-            results.append({
-                "drug": drug_name,
-                "dosing_requirements": f"Phenotype for {gene_name} not found in patient profile"
+            enriched_drug_analysis.append({
+                **drug_record,
+                "clinical_recommendation": {
+                    "recommendation": f"Phenotype for {gene_name} not found in patient profile",
+                    "alternative_drugs": [],
+                    "dosing_guidance": None,
+                    "monitoring": None,
+                    "cpic_classification": None,
+                },
             })
             continue
 
-        # 1. Retrieve guidelines
+        # Retrieve CPIC guideline docs
         retriever = get_retriever(gene_name, drug_name, k=8)
-        query = f"CPIC therapeutic recommendation for {drug_name} and {gene_name} {phenotype}"
+        query = f"CPIC therapeutic recommendation for {drug_name} and {gene_name} {phenotype} phenotype"
         docs = retriever.invoke(query)
 
-        # 2. Generate clinicial response
+        # Generate clinical recommendation from LLM + CPIC context
         analysis = generate_clinical_response(gene_name, drug_name, phenotype, docs)
-        
-        results.append({
-            "drug": drug_name,
-            "dosing_requirements": analysis.get("dosing_requirements")
+
+        enriched_drug_analysis.append({
+            **drug_record,
+            "clinical_recommendation": analysis.get("clinical_recommendation", {}),
         })
 
-    return {"dosing_requirements": results}
+    # Return the full enriched patient payload
+    return {
+        **patient_data,
+        "drug_analysis": enriched_drug_analysis,
+    }

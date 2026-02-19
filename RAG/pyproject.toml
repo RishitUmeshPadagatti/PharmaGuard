@@ -16,6 +16,8 @@ dependencies = [
     "python-dotenv",
     "google-generativeai",
     "fastapi",
-    "uvicorn"
+    "uvicorn",
+    "httpx",
+    "python-multipart>=0.0.22",
 ]
 
