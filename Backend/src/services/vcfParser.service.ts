@@ -11,7 +11,7 @@ export async function parseVCF(filePath: string): Promise<PGxVariant[]> {
 
   const parser = new VCF({
     header: headerLines.join("\n"),
-  }); 
+  });
 
   const variants: PGxVariant[] = [];
 
