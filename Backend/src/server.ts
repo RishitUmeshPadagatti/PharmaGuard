@@ -1,5 +1,6 @@
 import express from "express";
 import dotenv from "dotenv";
+import cors from "cors";
 import analyzeRoute from "./routes/analyze.route.js";
 import whatsappRoute from "./routes/whatsapp.route.js";
 import emailRoute from "./routes/email.route.js";
@@ -8,6 +9,7 @@ import session from "express-session";
 dotenv.config();
 
 const app = express();
+app.use(cors());
 app.use(
   session({
     secret: "pharmaguard-secret",
