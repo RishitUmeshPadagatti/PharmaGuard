@@ -16,7 +16,7 @@ interface RiskResult {
   confidence_score: number;
 }
 
-const drugGeneMap: Record<DrugName, string> = {
+export const drugGeneMap: Record<DrugName, string> = {
   CODEINE: "CYP2D6",
   WARFARIN: "CYP2C9",
   CLOPIDOGREL: "CYP2C19",
