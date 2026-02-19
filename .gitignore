@@ -18,3 +18,5 @@ dist
 *.sw?
 
 package-lock.json
+
+.env
