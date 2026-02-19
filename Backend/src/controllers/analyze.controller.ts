@@ -4,7 +4,8 @@ import { isValidDrug, DrugName } from "../types/drug.types.js";
 import { parseVCF } from "../services/vcfParser.service.js";
 import { generateDiplotypes } from "../services/diplotype.service.js";
 import { mapToPhenotype } from "../services/phenotype.service.js";
-import { evaluateRisk } from "../services/riskEngine.service.js";
+import { evaluateRisk, drugGeneMap } from "../services/riskEngine.service.js";
+import { generateClinicalExplanation } from "../services/gemini.service.js";
 
 export const analyzePatient = async (req: Request, res: Response) => {
   if (!req.session.patient_id) {
@@ -94,15 +95,34 @@ export const analyzePatient = async (req: Request, res: Response) => {
     const genePhenotypeMap = Object.fromEntries(
       phenotypeResults.map((p) => [p.gene, p.phenotype]),
     );
-    const drugAnalysis = drugs.map((drug) => {
-      const risk = evaluateRisk(drug as DrugName, genePhenotypeMap);
+    const drugAnalysis = await Promise.all(
+      drugs.map(async (drug) => {
+        const gene = drugGeneMap[drug as DrugName];
+        const risk = evaluateRisk(drug as DrugName, genePhenotypeMap);
 
-      return {
-        drug,
-        risk_assessment: risk,
-        clinical_recommendation: {}, // placeholder for now
-      };
-    });
+        const geneProfile = phenotypeResults.find((p) => p.gene === gene);
+        let explanation: any = {};
+
+        if (geneProfile) {
+          explanation = await generateClinicalExplanation({
+            drug,
+            gene: gene || "Unknown",
+            diplotype: geneProfile.diplotype,
+            phenotype: geneProfile.phenotype,
+            risk_label: risk.risk_label,
+            severity: risk.severity,
+            variants: geneProfile.detected_variants.map((v) => v.rsid),
+          });
+        }
+
+        return {
+          drug,
+          risk_assessment: risk,
+          clinical_recommendation: {}, // placeholder for now
+          explanation,
+        };
+      }),
+    );
 
     // console.log("Diplotypes:", diplotypes);
     // console.log("Parsed Variants:", variants);
@@ -123,6 +143,7 @@ export const analyzePatient = async (req: Request, res: Response) => {
     //   //   variant_count: variants.length,
     //   //   variants,
     // });
+
     return res.status(200).json({
       patient_id: patientId,
       timestamp: new Date().toISOString(),
@@ -131,9 +152,14 @@ export const analyzePatient = async (req: Request, res: Response) => {
         genes: phenotypeResults,
       },
 
-      drug_analysis: drugAnalysis,
+      drug_analysis: drugAnalysis.map(({ explanation, ...rest }) => rest),
 
-      llm_generated_explanation: {},
+      llm_generated_explanation: {
+        summary: drugAnalysis
+          .map((d) => d.explanation?.summary)
+          .filter(Boolean)
+          .join("\n\n"),
+      },
 
       quality_metrics: {
         vcf_parsing_success: true,
