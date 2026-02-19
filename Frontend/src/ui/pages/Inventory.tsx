@@ -2,7 +2,7 @@ import React from 'react';
 
 const Inventory: React.FC = () => {
     return (
-        <div className="p-8">
+        <div className="p-8 max-w-7xl mx-auto">
             <h1 className="text-3xl font-bold mb-4">Inventory Management</h1>
             <p className="text-gray-400">Track and manage your pharmaceutical supplies.</p>
             <div className="mt-8 bg-gray-800 rounded-xl border border-gray-700 overflow-hidden">
