@@ -45,7 +45,7 @@ function App() {
           </header>
 
           {/* Dynamic Content Area */}
-          <main className="flex-1 p-6 md:p-12 max-w-7xl mx-auto w-full">
+          <main className="flex-1 p-6 md:p-12 w-full mx-auto">
             <Routes>
               <Route path="/" element={<UploadData />} />
               <Route path="/upload" element={<UploadData />} />
