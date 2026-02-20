@@ -28,7 +28,7 @@ export function DiseaseSelector({ selectedDiseases, onSelectionChange }: Disease
     }
 
     return (
-        <Card className="w-full border-slate-200 shadow-xl shadow-slate-200/50 overflow-hidden h-full flex flex-col min-h-[500px] rounded-2xl">
+        <Card className="w-full border-slate-200 shadow-xl shadow-slate-200/50 overflow-hidden h-full flex flex-col min-h-[480px] rounded-2xl">
             <CardHeader className="bg-slate-50/50 pb-6 border-b border-slate-100">
                 <CardTitle className="text-xl font-bold text-slate-900">Drug Selection</CardTitle>
                 <CardDescription className="text-slate-500">
@@ -36,6 +36,31 @@ export function DiseaseSelector({ selectedDiseases, onSelectionChange }: Disease
                 </CardDescription>
             </CardHeader>
             <CardContent className="pt-8 flex-1 flex flex-col bg-white">
+                <div className="flex items-center justify-end mb-4 px-2">
+                    <div className="flex items-center gap-2 cursor-pointer group" onClick={() => {
+                        if (selectedDiseases.length === drugs.length) {
+                            onSelectionChange([])
+                        } else {
+                            onSelectionChange(drugs.map(d => d.id))
+                        }
+                    }}>
+                        <Label
+                            htmlFor="select-all"
+                            className="font-semibold text-xs uppercase tracking-widest cursor-pointer text-slate-500 group-hover:text-blue-600 transition-colors"
+                        >
+                            Select All
+                        </Label>
+                        <Checkbox
+                            id="select-all"
+                            checked={selectedDiseases.length === drugs.length}
+                            className={`h-4 w-4 rounded transition-all duration-300 ${selectedDiseases.length === drugs.length
+                                ? "bg-blue-600 border-blue-600 data-[state=checked]:bg-blue-600"
+                                : "border-slate-300 group-hover:border-slate-400"
+                                }`}
+                        />
+                    </div>
+                </div>
+
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 flex-1">
                     {drugs.map((drug) => (
                         <div

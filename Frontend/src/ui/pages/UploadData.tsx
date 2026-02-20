@@ -7,6 +7,7 @@ import { Progress } from "@/ui/components/ui/progress"
 import { ArrowRight, Eye, Loader2 } from "lucide-react"
 import { toast } from "sonner"
 import { useFile } from "@/ui/context/FileContext"
+import { BACKEND_URL } from "../lib/values"
 
 export default function UploadData() {
     const { file, setFile, selectedDrugs, setSelectedDrugs } = useFile()
@@ -71,7 +72,7 @@ export default function UploadData() {
                 handleError()
             }
 
-            xhr.open("POST", "http://localhost:8000/api/analyze")
+            xhr.open("POST", `${BACKEND_URL}/api/analyze`)
             xhr.send(formData)
 
             // Simulate the analysis part of the progress (from 50% upwards)

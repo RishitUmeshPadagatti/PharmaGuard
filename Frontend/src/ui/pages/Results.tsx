@@ -1,4 +1,6 @@
-import { useState } from "react"
+import { useState, useRef } from "react"
+import { toCanvas } from "html-to-image"
+import { jsPDF } from "jspdf"
 import { useLocation, useNavigate } from "react-router-dom"
 import { Button } from "@/ui/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/ui/components/ui/card"
@@ -17,9 +19,12 @@ import {
     Code,
     Copy,
     Check,
-    FileDown
+    FileDown,
+    Mail,
+    MessageCircle
 } from "lucide-react"
 import { toast } from "sonner"
+import { BACKEND_URL } from "../lib/values"
 
 export default function Results() {
     const location = useLocation()
@@ -27,6 +32,122 @@ export default function Results() {
     const { results } = location.state || { results: null }
     const [showJson, setShowJson] = useState(false)
     const [copied, setCopied] = useState(false)
+    const reportRef = useRef<HTMLDivElement>(null)
+
+    const handleExportPdf = async () => {
+        console.log("Export PDF clicked (enhanced multi-page)");
+        if (!reportRef.current) {
+            console.error("Report reference is null");
+            return;
+        }
+
+        const loadingToast = toast.loading('Generating multi-page PDF report...');
+
+        try {
+            const element = reportRef.current;
+
+            // Force a fixed wide width for capture to ensure the desktop layout (6xl) is fully expanded
+            const desktopWidth = 1200;
+            console.log(`Rendering content at ${desktopWidth}px...`);
+
+            const canvas = await toCanvas(element, {
+                pixelRatio: 2,
+                backgroundColor: '#ffffff',
+                width: desktopWidth,
+                height: element.scrollHeight,
+                style: {
+                    width: `${desktopWidth}px`,
+                    maxWidth: 'none',
+                    margin: '0',
+                    padding: '20px'
+                },
+                filter: (node: any) => {
+                    return !(node instanceof HTMLElement && node.getAttribute('data-html2canvas-ignore') === 'true');
+                }
+            });
+
+            const imgData = canvas.toDataURL('image/jpeg', 1.0);
+
+            const pdf = new jsPDF('p', 'mm', 'letter');
+            const pdfWidth = pdf.internal.pageSize.getWidth();
+            const pdfHeight = pdf.internal.pageSize.getHeight();
+
+            const imgProps = pdf.getImageProperties(imgData);
+            const margin = 5;
+            const contentWidth = pdfWidth - (2 * margin);
+            const ratio = imgProps.width / imgProps.height;
+            const contentHeight = contentWidth / ratio;
+
+            let heightLeft = contentHeight;
+            let position = 0;
+
+            // Page 1
+            pdf.addImage(imgData, 'JPEG', margin, position, contentWidth, contentHeight);
+            heightLeft -= pdfHeight;
+
+            // Additional pages
+            while (heightLeft > 0) {
+                position = heightLeft - contentHeight;
+                pdf.addPage();
+                pdf.addImage(imgData, 'JPEG', margin, position, contentWidth, contentHeight);
+                heightLeft -= pdfHeight;
+            }
+
+            console.log("Saving PDF...");
+            pdf.save(`Pharmacogenomic_Report_${results.patient_id}.pdf`);
+
+            console.log("Export successful");
+            toast.success('PDF downloaded successfully!', { id: loadingToast });
+        } catch (error) {
+            console.error("Error generating PDF:", error);
+            toast.error('Failed to generate PDF. Check console for details.', { id: loadingToast });
+        }
+    }
+
+    const handleConsultEmail = async () => {
+        const email = window.prompt("Enter the specialist's email address:", "rishit1275@outlook.com");
+        if (!email) return;
+
+        const loadingToast = toast.loading('Sending email to specialist...');
+        try {
+            const response = await fetch(`${BACKEND_URL}/api/email/review`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    subject: "Pharmacogenomic Report Review Request",
+                    message: `A new pharmacogenomic report (Patient ID: ${results.patient_id}) is ready for your clinical review.`,
+                    to: email
+                })
+            });
+
+            if (!response.ok) throw new Error("Failed to send email");
+
+            toast.success('Email sent successfully!', { id: loadingToast });
+        } catch (error) {
+            console.error("Error sending email:", error);
+            toast.error('Failed to send email. Ensure the backend is running.', { id: loadingToast });
+        }
+    }
+
+    const handleConsultWhatsApp = async () => {
+        const loadingToast = toast.loading('Sending WhatsApp notification...');
+        try {
+            const response = await fetch(`${BACKEND_URL}/api/whatsapp/review`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    message: "Hello Testing"
+                })
+            });
+
+            if (!response.ok) throw new Error("Failed to send WhatsApp message");
+
+            toast.success('WhatsApp notification sent!', { id: loadingToast });
+        } catch (error) {
+            console.error("Error sending WhatsApp:", error);
+            toast.error('WhatsApp failed. Check your Twilio configuration.', { id: loadingToast });
+        }
+    }
 
     if (!results) {
         return (
@@ -113,7 +234,7 @@ export default function Results() {
     const llmSummary = results.llm_generated_explanation?.summary;
 
     return (
-        <div className="max-w-6xl mx-auto space-y-10 animate-in fade-in slide-in-from-top-4 duration-700 pb-20">
+        <div ref={reportRef} className="max-w-6xl mx-auto px-12 pt-12 space-y-10 animate-in fade-in slide-in-from-top-4 duration-700 pb-20 bg-white">
             {/* Header Area Area */}
             <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 pb-6 border-b border-slate-100">
                 <div className="space-y-4">
@@ -149,7 +270,10 @@ export default function Results() {
                         <Code className="mr-2 h-4 w-4" />
                         {showJson ? "Hide JSON" : "View JSON Response"}
                     </Button>
-                    <Button className="rounded-xl h-12 bg-slate-900 hover:bg-slate-800 shadow-lg shadow-slate-200">
+                    <Button
+                        onClick={handleExportPdf}
+                        className="rounded-xl h-12 bg-slate-900 hover:bg-slate-800 shadow-lg shadow-slate-200"
+                    >
                         <Download className="mr-2 h-4 w-4" /> Export PDF
                     </Button>
                 </div>
@@ -157,53 +281,55 @@ export default function Results() {
 
             {/* JSON Viewer Area */}
             {showJson && (
-                <Card className="border-2 border-slate-200 overflow-hidden rounded-[2rem] animate-in slide-in-from-top-4 duration-500">
-                    <CardHeader className="bg-slate-50 border-b border-slate-200 flex flex-row items-center justify-between p-6">
-                        <div>
-                            <CardTitle className="text-lg font-black text-slate-900">Raw JSON Response</CardTitle>
-                        </div>
-                        <div className="flex gap-2">
-                            <Button size="sm" variant="outline" className="rounded-lg bg-white" onClick={handleCopyJson}>
-                                {copied ? <Check className="h-4 w-4 text-emerald-600" /> : <Copy className="h-4 w-4" />}
-                                <span className="ml-2">{copied ? "Copied" : "Copy"}</span>
-                            </Button>
-                            <Button size="sm" variant="outline" className="rounded-lg bg-white" onClick={handleDownloadJson}>
-                                <FileDown className="h-4 w-4" />
-                                <span className="ml-2">Download</span>
-                            </Button>
-                        </div>
-                    </CardHeader>
-                    <CardContent className="p-0">
-                        <div className="bg-slate-900 p-8 max-h-[600px] overflow-auto">
-                            <pre className="text-blue-300 font-mono text-xs leading-relaxed">
-                                {JSON.stringify(results, null, 4)}
-                            </pre>
-                        </div>
-                    </CardContent>
-                </Card>
+                <div data-html2canvas-ignore="true">
+                    <Card className="border-2 border-slate-200 overflow-hidden rounded-[2rem] animate-in slide-in-from-top-4 duration-500">
+                        <CardHeader className="bg-slate-50 border-b border-slate-200 flex flex-row items-center justify-between p-6">
+                            <div>
+                                <CardTitle className="text-lg font-black text-slate-900">Raw JSON Response</CardTitle>
+                            </div>
+                            <div className="flex gap-2">
+                                <Button size="sm" variant="outline" className="rounded-lg bg-white" onClick={handleCopyJson}>
+                                    {copied ? <Check className="h-4 w-4 text-emerald-600" /> : <Copy className="h-4 w-4" />}
+                                    <span className="ml-2">{copied ? "Copied" : "Copy"}</span>
+                                </Button>
+                                <Button size="sm" variant="outline" className="rounded-lg bg-white" onClick={handleDownloadJson}>
+                                    <FileDown className="h-4 w-4" />
+                                    <span className="ml-2">Download</span>
+                                </Button>
+                            </div>
+                        </CardHeader>
+                        <CardContent className="p-0">
+                            <div className="bg-slate-900 p-8 max-h-[600px] overflow-auto">
+                                <pre className="text-blue-300 font-mono text-xs leading-relaxed">
+                                    {JSON.stringify(results, null, 4)}
+                                </pre>
+                            </div>
+                        </CardContent>
+                    </Card>
+                </div>
             )}
 
             {/* AI Summary Section */}
             {llmSummary && (
-                <Card className="border-none shadow-2xl bg-slate-900 overflow-hidden relative rounded-[2.5rem]">
-                    <div className="absolute top-0 right-0 p-8 opacity-20 pointer-events-none">
-                        <Activity className="h-64 w-64 text-blue-500" />
+                <Card className="border-4 border-slate-100 shadow-2xl bg-white overflow-hidden relative rounded-[2.5rem]">
+                    <div className="absolute top-0 right-0 p-8 opacity-5 pointer-events-none">
+                        <Activity className="h-64 w-64 text-blue-600" />
                     </div>
-                    <div className="absolute inset-0 bg-gradient-to-br from-blue-600/20 via-transparent to-indigo-600/20" />
+                    <div className="absolute inset-0 bg-gradient-to-br from-blue-50 via-transparent to-indigo-50" />
                     <CardHeader className="p-10 pb-4 relative z-10">
                         <div className="flex items-center gap-4 mb-4">
-                            <div className="p-3 bg-blue-500 rounded-2xl shadow-lg shadow-blue-500/20">
+                            <div className="p-3 bg-blue-600 rounded-2xl shadow-xl shadow-blue-200">
                                 <Activity className="h-6 w-6 text-white" />
                             </div>
                             <div>
-                                <CardTitle className="text-white text-3xl font-black tracking-tighter">Clinical Intelligence</CardTitle>
-                                <p className="text-blue-400 font-bold text-xs uppercase tracking-[0.2em] mt-1">LLM-Generated Executive Insight</p>
+                                <CardTitle className="text-slate-900 text-3xl font-black tracking-tighter">Clinical Intelligence</CardTitle>
+                                <p className="text-blue-600 font-bold text-xs uppercase tracking-[0.2em] mt-1">LLM-Generated Executive Insight</p>
                             </div>
                         </div>
                     </CardHeader>
                     <CardContent className="p-10 pt-0 relative z-10">
-                        <div className="bg-white/5 backdrop-blur-md rounded-[2rem] p-8 border border-white/10 shadow-inner">
-                            <p className="text-blue-50/90 text-xl leading-relaxed font-medium">
+                        <div className="bg-white/80 backdrop-blur-sm rounded-[2rem] p-8 border-2 border-slate-100 shadow-inner">
+                            <p className="text-slate-700 text-xl leading-relaxed font-bold">
                                 {llmSummary}
                             </p>
                         </div>
@@ -322,27 +448,27 @@ export default function Results() {
                                                     </div>
                                                 </div>
 
-                                                <div className="p-8 bg-slate-900 rounded-[2rem] text-white overflow-hidden relative">
-                                                    <div className="absolute top-0 right-0 p-4 opacity-10">
-                                                        <Dna className="h-20 w-20" />
+                                                <div className="p-8 bg-slate-50 rounded-[2rem] text-slate-900 overflow-hidden relative border-2 border-slate-100 shadow-inner">
+                                                    <div className="absolute top-0 right-0 p-4 opacity-5">
+                                                        <Dna className="h-20 w-20 text-blue-600" />
                                                     </div>
-                                                    <h4 className="text-[10px] font-black text-blue-400 uppercase tracking-widest mb-6 border-b border-white/10 pb-4">Associated Genomic Markers</h4>
+                                                    <h4 className="text-[10px] font-black text-blue-600 uppercase tracking-widest mb-6 border-b border-slate-200 pb-4">Associated Genomic Markers</h4>
                                                     <div className="space-y-4">
                                                         {genomicProfile.length > 0 ? genomicProfile.slice(0, 2).map((gene: any) => (
-                                                            <div key={gene.gene} className="flex items-center justify-between p-3 bg-white/5 rounded-xl border border-white/10">
+                                                            <div key={gene.gene} className="flex items-center justify-between p-3 bg-white rounded-xl border border-slate-200 shadow-sm">
                                                                 <div className="flex items-center gap-3">
-                                                                    <div className="w-8 h-8 rounded-lg bg-blue-600 flex items-center justify-center text-[10px] font-black">
+                                                                    <div className="w-8 h-8 rounded-lg bg-blue-600 flex items-center justify-center text-white text-[10px] font-black">
                                                                         {gene.gene.slice(0, 3)}
                                                                     </div>
                                                                     <div>
-                                                                        <p className="text-xs font-black text-white">{gene.gene}</p>
+                                                                        <p className="text-xs font-black text-slate-900">{gene.gene}</p>
                                                                         <p className="text-[9px] text-slate-500 font-bold uppercase">{gene.diplotype}</p>
                                                                     </div>
                                                                 </div>
-                                                                <span className="text-[10px] font-black text-blue-400 uppercase tracking-tighter">{gene.phenotype}</span>
+                                                                <span className="text-[10px] font-black text-blue-600 uppercase tracking-tighter">{gene.phenotype}</span>
                                                             </div>
                                                         )) : (
-                                                            <p className="text-xs text-slate-500 italic">Global profile markers apply.</p>
+                                                            <p className="text-xs text-slate-500 italic font-bold">Global profile markers apply.</p>
                                                         )}
                                                     </div>
                                                 </div>
@@ -378,11 +504,11 @@ export default function Results() {
                         <div className="overflow-x-auto">
                             <table className="w-full text-left border-collapse">
                                 <thead>
-                                    <tr className="bg-slate-900 text-white">
-                                        <th className="px-10 py-8 text-[11px] font-black text-blue-400 uppercase tracking-[0.2em]">Gene Symbol</th>
-                                        <th className="px-10 py-8 text-[11px] font-black text-blue-400 uppercase tracking-[0.2em]">Diplotype Config</th>
-                                        <th className="px-10 py-8 text-[11px] font-black text-blue-400 uppercase tracking-[0.2em]">Metabolic Phenotype</th>
-                                        <th className="px-10 py-8 text-[11px] font-black text-blue-400 uppercase tracking-[0.2em]">Detected Pathogenic Variants</th>
+                                    <tr className="bg-slate-50 border-b-2 border-slate-100">
+                                        <th className="px-10 py-8 text-[11px] font-black text-blue-600 uppercase tracking-[0.2em]">Gene Symbol</th>
+                                        <th className="px-10 py-8 text-[11px] font-black text-blue-600 uppercase tracking-[0.2em]">Diplotype Config</th>
+                                        <th className="px-10 py-8 text-[11px] font-black text-blue-600 uppercase tracking-[0.2em]">Metabolic Phenotype</th>
+                                        <th className="px-10 py-8 text-[11px] font-black text-blue-600 uppercase tracking-[0.2em]">Detected Pathogenic Variants</th>
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y-2 divide-slate-100 font-medium">
@@ -390,8 +516,8 @@ export default function Results() {
                                         <tr key={gene.gene} className="hover:bg-blue-50/50 transition-all duration-300 group">
                                             <td className="px-10 py-8">
                                                 <div className="flex items-center gap-6">
-                                                    <div className="h-16 w-16 rounded-[1.5rem] bg-slate-900 flex flex-col items-center justify-center text-white shadow-xl group-hover:bg-blue-600 group-hover:scale-110 transition-all duration-500">
-                                                        <span className="text-xs font-black opacity-40">GENE</span>
+                                                    <div className="h-16 w-16 rounded-[1.5rem] bg-blue-600 flex flex-col items-center justify-center text-white shadow-xl group-hover:scale-110 transition-all duration-500">
+                                                        <span className="text-xs font-black opacity-60 uppercase">Gene</span>
                                                         <span className="text-lg font-black">{gene.gene}</span>
                                                     </div>
                                                     <div>
@@ -444,52 +570,7 @@ export default function Results() {
             </section>
             {/* Report Quality & Integrity Section */}
             <section className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-1000 delay-300">
-                <div className="flex items-center gap-4">
-                    <div className="p-3 bg-slate-800 rounded-2xl shadow-xl">
-                        <ShieldAlert className="h-7 w-7 text-white" />
-                    </div>
-                    <div>
-                        <h2 className="text-3xl font-black text-slate-900 tracking-tight">Report Integrity & Quality Control</h2>
-                        <p className="text-sm text-slate-500 font-bold uppercase tracking-widest mt-0.5">Automated Diagnostic Validation Metrics</p>
-                    </div>
-                </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                    <Card className="bg-slate-50 border-2 border-slate-200 rounded-[2rem] p-8 flex flex-col items-center text-center shadow-sm hover:shadow-md transition-shadow">
-                        <div className="p-4 bg-emerald-100 rounded-3xl mb-4">
-                            <CheckCircle2 className="h-8 w-8 text-emerald-600" />
-                        </div>
-                        <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">VCF Parsing Status</h4>
-                        <p className="text-2xl font-black text-slate-900">
-                            {results.quality_metrics?.vcf_parsing_success ? "VALIDATED" : "FAILED"}
-                        </p>
-                        <p className="text-[10px] text-emerald-600 font-black mt-2 bg-emerald-50 px-3 py-1 rounded-full border border-emerald-100">INTEGRITY CHECK PASSED</p>
-                    </Card>
-
-                    <Card className="bg-slate-50 border-2 border-slate-200 rounded-[2rem] p-8 flex flex-col items-center text-center shadow-sm hover:shadow-md transition-shadow">
-                        <div className="p-4 bg-blue-100 rounded-3xl mb-4">
-                            <Dna className="h-8 w-8 text-blue-600" />
-                        </div>
-                        <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Total Variants Processed</h4>
-                        <p className="text-3xl font-black text-slate-900">
-                            {results.quality_metrics?.total_variants_processed?.toLocaleString() || "14,502"}
-                        </p>
-                        <p className="text-[10px] text-blue-600 font-black mt-2 bg-blue-50 px-3 py-1 rounded-full border border-blue-100">GENOMIC DEPTH ANALYSIS</p>
-                    </Card>
-
-                    <Card className="bg-slate-50 border-2 border-slate-200 rounded-[2rem] p-8 flex flex-col items-center text-center shadow-sm hover:shadow-md transition-shadow">
-                        <div className="p-4 bg-indigo-100 rounded-3xl mb-4">
-                            <Activity className="h-8 w-8 text-indigo-600" />
-                        </div>
-                        <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Filter Pass Rate</h4>
-                        <p className="text-3xl font-black text-slate-900">
-                            {(results.quality_metrics?.quality_filter_pass_rate * 100).toFixed(1)}%
-                        </p>
-                        <div className="w-full h-2 bg-slate-200 rounded-full mt-4 overflow-hidden max-w-[120px]">
-                            <div className="h-full bg-indigo-600" style={{ width: `${results.quality_metrics?.quality_filter_pass_rate * 100}%` }} />
-                        </div>
-                    </Card>
-                </div>
 
                 <div className="bg-slate-900 rounded-[2.5rem] p-10 text-white relative overflow-hidden">
                     <div className="absolute top-0 right-0 p-8 opacity-10 pointer-events-none">
@@ -502,9 +583,24 @@ export default function Results() {
                                 This report is an automated genomic analysis. All clinical decisions should be reviewed by a qualified pharmacogenomics specialist or attending physician.
                             </p>
                         </div>
-                        <Button className="h-16 px-10 bg-blue-600 hover:bg-blue-700 text-white font-black rounded-2xl shadow-xl shadow-blue-500/30 border-t border-blue-400 transition-all hover:scale-105 active:scale-95">
-                            Consult Specialist
-                        </Button>
+                        <div className="flex flex-wrap gap-4">
+                            <Button
+                                onClick={handleConsultEmail}
+                                variant="outline"
+                                className="h-14 px-6 bg-white/5 text-white font-bold rounded-2xl border-white/20 transition-all hover:scale-105 active:scale-95 flex items-center gap-3"
+                            >
+                                <Mail className="h-4 w-4" />
+                                Consult Email
+                            </Button>
+                            <Button
+                                onClick={handleConsultWhatsApp}
+                                variant="outline"
+                                className="h-14 px-6 bg-white/5 text-white font-bold rounded-2xl border-white/20 transition-all hover:scale-105 active:scale-95 flex items-center gap-3"
+                            >
+                                <MessageCircle className="h-4 w-4" />
+                                Consult WhatsApp
+                            </Button>
+                        </div>
                     </div>
                 </div>
             </section>
