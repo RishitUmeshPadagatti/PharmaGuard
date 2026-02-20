@@ -5,12 +5,9 @@
 🚀 PharmaGuard is an AI-powered precision medicine platform that analyzes patient genetic data (VCF files) and generates CPIC-aligned pharmacogenomic risk predictions with explainable clinical recommendations.
 
 ---
+![WhatsApp Image 2026-02-20 at 8 05 33 AM](https://github.com/user-attachments/assets/37595bf8-bd1c-4977-b002-28770bf0b651)
 
-## 🌍 Live Demo
 
-- 🔗 **Live Application URL:** [Add Deployment Link Here]
-- 🎥 **LinkedIn Demo Video:** [Add LinkedIn Video Link Here]
-- 📂 **GitHub Repository:** [Add Repo Link Here]
 
 ---
 
@@ -45,7 +42,7 @@ PharmaGuard enables genotype-guided prescribing by:
 - CYP2D6  
 - CYP2C19  
 - CYP2C9  
-- SLCO1B1  
+- SLCO1B1     
 - TPMT  
 - DPYD  
 
@@ -199,29 +196,6 @@ Raspberry Pi (Edge)
 
 Cloud Hosting (Render / Vercel / etc.)
 
-🚀 Installation Guide
-1️⃣ Clone Repository
-git clone https://github.com/your-username/pharmaguard.git
-cd pharmaguard
-2️⃣ Create Virtual Environment
-python -m venv venv
-source venv/bin/activate      # Mac/Linux
-venv\Scripts\activate         # Windows
-3️⃣ Install Dependencies
-pip install -r requirements.txt
-4️⃣ Setup Environment Variables
-Create a .env file:
-
-LLM_API_KEY=your_api_key_here
-5️⃣ Run Application
-uvicorn main:app --reload
-Open:
-
-http://127.0.0.1:8000
-📖 API Documentation
-POST /analyze
-Input:
-
 VCF file
 
 Drug name(s)
@@ -237,7 +211,6 @@ Zero-hallucination medical AI strategy
 
 Automated genotype-to-phenotype mapping
 
-Explainable clinical reasoning
 
 Edge deployment for genomic privacy
 
@@ -254,7 +227,10 @@ AI-assisted clinical decision support
 
 Transparent and explainable pharmacogenomics
 
-👥 Team
-Team Name: AI Tronix
+👥 Team Name
+ AI Tronix
 Hackathon: RIFT 2026
 Track: Pharmacogenomics / Explainable AI
+
+
+
