@@ -165,6 +165,71 @@ export const analyzePatient = async (req: Request, res: Response) => {
         vcf_parsing_success: true,
       },
     });
+
+
+    
+    // return res.status(200).json(
+    //   {
+    //     "patient_id": "59a9a0a3",
+    //     "timestamp": "2026-02-19T19:57:54.553Z",
+    //     "pharmacogenomic_profile": {
+    //       "genes": [
+    //         {
+    //           "gene": "CYP2D6",
+    //           "diplotype": "*4/*4",
+    //           "phenotype": "PM",
+    //           "detected_variants": [
+    //             {
+    //               "rsid": "rs3892097"
+    //             },
+    //             {
+    //               "rsid": "rs1065852"
+    //             }
+    //           ]
+    //         },
+    //         {
+    //           "gene": "CYP2C19",
+    //           "diplotype": "*2/*2",
+    //           "phenotype": "PM",
+    //           "detected_variants": [
+    //             {
+    //               "rsid": "rs4244285"
+    //             },
+    //             {
+    //               "rsid": "rs4986893"
+    //             }
+    //           ]
+    //         }
+    //       ]
+    //     },
+    //     "drug_analysis": [
+    //       {
+    //         "drug": "CODEINE",
+    //         "risk_assessment": {
+    //           "risk_label": "Toxic",
+    //           "severity": "high",
+    //           "confidence_score": 0.90
+    //         },
+    //         "clinical_recommendation": {}
+    //       },
+    //       {
+    //         "drug": "CLOPIDOGREL",
+    //         "risk_assessment": {
+    //           "risk_label": "Ineffective",
+    //           "severity": "high",
+    //           "confidence_score": 0.95
+    //         },
+    //         "clinical_recommendation": {}
+    //       }
+    //     ],
+    //     "llm_generated_explanation": {
+    //       "summary": "The patient's CYP2D6 genotype is *4/*4, classifying them as a Poor Metabolizer (PM). For a prodrug like codeine, which requires CYP2D6 to convert into its active analgesic form, morphine, this genotype results in severely impaired or absent metabolic activation. The detected variants, rs3892097 and rs1065852, are characteristic of the non-functional *4 allele, leading to a significant reduction in enzyme activity. Consequently, this patient is unlikely to achieve effective pain relief from codeine, and based on these findings, the overall clinical risk assessment for this drug is classified as Toxic.\n\nThis patient has a *CYP2C19* diplotype of *2/*2, resulting in a Poor Metabolizer (PM) phenotype. Clopidogrel is a prodrug requiring activation by CYP2C19 to its active metabolite. As a PM, this patient exhibits significantly reduced or absent CYP2C19 enzyme activity, thereby impairing the conversion of clopidogrel to its active form. The detected variants, rs4244285 and rs4986893, are specifically associated with the *CYP2C19* null allele *2*, which leads to a severe loss of enzyme function. Consequently, clopidogrel activation will be impaired, leading to an \"Ineffective\" antiplatelet response and an increased risk of thrombotic events."
+    //     },
+    //     "quality_metrics": {
+    //       "vcf_parsing_success": true
+    //     }
+    //   }
+    // )
   } catch (err: any) {
     console.error(err);
     return res.status(500).json({ message: err.message });
