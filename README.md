@@ -126,6 +126,8 @@ The application produces structured JSON output:
   "llm_generated_explanation": {},
   "quality_metrics": {}
 }
+```
+
 🌐 Web Application Features
 🔹 File Upload
 Drag & drop VCF upload
