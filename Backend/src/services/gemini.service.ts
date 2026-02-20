@@ -2,11 +2,6 @@ import { GoogleGenerativeAI } from "@google/generative-ai";
 import dotenv from "dotenv";
 dotenv.config();
 
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
-const model = genAI.getGenerativeModel({
-  model: "gemini-2.5-flash-lite",
-});
-
 interface GeminiInput {
   drug: string;
   gene: string;
@@ -40,14 +35,43 @@ Instructions:
 7. Keep it concise (approx. 4-6 sentences).
 `;
 
-  const result = await model.generateContent(prompt);
-  const response = await result.response;
-  const text = response.text();
+  const apiKeys = [
+    process.env.GEMINI_API_KEY1,
+    process.env.GEMINI_API_KEY2,
+    process.env.GEMINI_API_KEY3,
+  ];
 
-  return {
-    summary: text.trim(),
-    biological_mechanism: "",
-    variant_citations: input.variants,
-    clinical_impact: "",
-  };
+  let lastError = null;
+
+  for (let i = 0; i < apiKeys.length; i++) {
+    const apiKey = apiKeys[i];
+    if (!apiKey) continue;
+
+    const keyName = `GEMINI_API_KEY${i + 1}`;
+    try {
+      console.log(`Attempting analysis with ${keyName}...`);
+      const genAI = new GoogleGenerativeAI(apiKey);
+      const model = genAI.getGenerativeModel({
+        model: "gemini-2.5-flash-lite",
+      });
+
+      const result = await model.generateContent(prompt);
+      const response = await result.response;
+      const text = response.text();
+
+      console.log(`Successfully generated content using ${keyName}.`);
+      return {
+        summary: text.trim(),
+        biological_mechanism: "",
+        variant_citations: input.variants,
+        clinical_impact: "",
+      };
+    } catch (error) {
+      console.error(`${keyName} got cancelled due to error:`, error);
+      lastError = error;
+    }
+  }
+
+  throw lastError || new Error("All Gemini API keys failed or were not provided.");
 }
+
